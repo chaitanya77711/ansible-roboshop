@@ -31,6 +31,7 @@
   - name: print the output
     ansible.builtin.debug:
       msg: "{{ ec2_output }}"
+    when: action == "create"  
 
   - name: create r53 records
     amazon.aws.route53:
@@ -40,10 +41,12 @@
       type: A
       ttl: 1
       value: "{{ item.instances[0].private_ip_address }}"
-      wait: true
+      wait: false
+      overwrite: true
     loop: "{{ ec2_output.results }}"  
+    when: action == "create"
 
-  - name: create r53 record for frontend
+  - name: create r53 records
     amazon.aws.route53:
       state: present
       zone: "{{ domain_name }}"
@@ -54,4 +57,24 @@
       wait: false
       overwrite: true
     loop: "{{ ec2_output.results }}"
-    when: item.item == "frontend"     
+    when: 
+    - item.item == "frontend"     
+    - action == "create"
+
+  - name: delete r53 records
+    amazon.aws.route53:
+    state: absent
+    zone: "{{ domain_name }}"
+    record: "{{ item }}-{{ env }}.{{ domain_name }}"
+    type: A 
+    ttl: 1
+    loop: "{{ instance }}"
+    when: action == "destroy"   
+
+  - name: delete ec2 instance
+    amazon.aws.ec2_instance:
+      state: absent
+      name: "{{ item }}-{{ env }}"
+      wait: false
+    loop: "{{ instances }}" 
+    when: action == "destroy"  
